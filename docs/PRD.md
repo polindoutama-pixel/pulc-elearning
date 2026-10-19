@@ -116,3 +116,9 @@ Pembayaran, marketplace kelas publik, dan penjualan kelas tidak termasuk kebutuh
 - Audio merupakan format materi tersendiri dengan pemutar, resume, dan pencatatan progres.
 - Pre-test dan post-test dapat diaktifkan terpisah. Laporan memisahkan nilai awal, nilai akhir terbaik, dan perubahan nilai.
 - Database lama mempertahankan kuis sebagai post-test dan seluruh hasil/progresnya. Revisi kelas yang telah berpeserta menggunakan duplikasi draft.
+
+## Penyempurnaan editor artikel
+
+Admin menulis dan memformat artikel menggunakan rich text, tanpa memasukkan kode HTML. Format yang tersedia mengikuti konten yang didukung server: paragraf, judul/subjudul, tebal, miring, garis bawah, daftar, kutipan, dan tautan HTTPS/email. Artikel lama ditampilkan sebagai konten terformat dan tidak ditulis ulang hanya karena editor dibuka.
+
+Tombol Tambah materi tersedia di bagian atas serta setelah materi terakhir. Keduanya menambahkan materi di akhir daftar dan mengarahkan fokus ke judul materi baru, sehingga admin tidak perlu kembali ke atas halaman. Alur ini harus berfungsi pada ponsel dan mendukung navigasi keyboard.

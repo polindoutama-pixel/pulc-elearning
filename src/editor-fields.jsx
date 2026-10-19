@@ -1,4 +1,9 @@
 import React from 'react';
+const RichTextEditor = React.lazy(() =>
+  import('./rich-text-editor.jsx').then((module) => ({
+    default: module.RichTextEditor,
+  })),
+);
 import {
   Plus,
   Trash2,
@@ -54,6 +59,7 @@ export function LessonFields({
       <div className="form-grid">
         <Field label="Judul materi">
           <input
+            data-lesson-title
             value={l.title}
             onChange={(e) => onChange({ title: e.target.value })}
           />
@@ -71,16 +77,19 @@ export function LessonFields({
         </Field>
       </div>
       {l.type === 'text' ? (
-        <Field
-          label="Isi materi"
-          hint="Tulis teks biasa atau HTML sederhana: paragraf, judul, daftar, dan tautan HTTPS."
+        <React.Suspense
+          fallback={
+            <div className="loading" role="status">
+              Menyiapkan editor artikel…
+            </div>
+          }
         >
-          <textarea
-            rows={7}
+          <RichTextEditor
+            label="Isi materi"
             value={l.body || ''}
-            onChange={(e) => onChange({ body: e.target.value })}
+            onChange={(body) => onChange({ body })}
           />
-        </Field>
+        </React.Suspense>
       ) : (
         <>
           {l.type === 'video' && (

@@ -16,7 +16,7 @@ import {
 } from './editor-fields.jsx';
 import { LessonContent } from './lesson-content.jsx';
 import { isTrackedMedia, lessonTypeLabels } from '../shared/media.js';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowRight,
@@ -2907,6 +2907,23 @@ function CourseEditor({ course, departments, onClose, onSave }) {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(null);
+  const pendingLesson = useRef(null);
+  const addLesson = () => {
+    const lesson = {
+      id: crypto.randomUUID(),
+      title: '',
+      type: 'text',
+      body: '',
+      required: true,
+    };
+    pendingLesson.current = lesson.id;
+    setForm((f) => ({ ...f, lessons: [...f.lessons, lesson] }));
+  };
+  const updateLesson = (i, key, value) =>
+    setForm((f) => ({
+      ...f,
+      lessons: f.lessons.map((l, j) => (i === j ? { ...l, [key]: value } : l)),
+    }));
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const upload = async (i, file) => {
     if (!file) return;
@@ -3120,25 +3137,15 @@ function CourseEditor({ course, departments, onClose, onSave }) {
           <>
             <div className="editor-section-intro">
               <p>
-                Tambahkan bacaan, video, gambar, atau presentasi PDF. Unggahan
-                maksimal 100 MB per file.
+                Tambahkan artikel, video, audio, gambar, dokumen, atau
+                presentasi. Unggahan maksimal 100 MB per file.
               </p>
               <Button
                 type="button"
                 variant="secondary"
                 icon={Plus}
-                onClick={() =>
-                  set('lessons', [
-                    ...form.lessons,
-                    {
-                      id: crypto.randomUUID(),
-                      title: '',
-                      type: 'text',
-                      body: '',
-                      required: true,
-                    },
-                  ])
-                }
+                onClick={addLesson}
+                disabled={form.lessons.length >= 100 || uploading !== null}
               >
                 Tambah materi
               </Button>
@@ -3150,7 +3157,26 @@ function CourseEditor({ course, departments, onClose, onSave }) {
               />
             )}
             {form.lessons.map((l, i) => (
-              <div className="lesson-editor" key={l.id}>
+              <div
+                className="lesson-editor"
+                key={l.id}
+                ref={(node) => {
+                  if (node && pendingLesson.current === l.id) {
+                    pendingLesson.current = null;
+                    node.scrollIntoView({
+                      behavior: window.matchMedia(
+                        '(prefers-reduced-motion: reduce)',
+                      ).matches
+                        ? 'instant'
+                        : 'smooth',
+                      block: 'start',
+                    });
+                    node
+                      .querySelector('[data-lesson-title]')
+                      ?.focus({ preventScroll: true });
+                  }
+                }}
+              >
                 <div className="lesson-editor-heading">
                   <strong>Materi {String(i + 1).padStart(2, '0')}</strong>
                   <div className="row-actions">
@@ -3218,6 +3244,23 @@ function CourseEditor({ course, departments, onClose, onSave }) {
                 </label>
               </div>
             ))}
+            {form.lessons.length > 0 && (
+              <div className="add-lesson-bottom">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  icon={Plus}
+                  onClick={addLesson}
+                  aria-label="Tambah materi di bawah"
+                  disabled={form.lessons.length >= 100 || uploading !== null}
+                >
+                  Tambah materi
+                </Button>
+                <small>
+                  Tambahkan materi berikutnya tanpa kembali ke atas.
+                </small>
+              </div>
+            )}
           </>
         )}
         {tab === 'Kuis' && (

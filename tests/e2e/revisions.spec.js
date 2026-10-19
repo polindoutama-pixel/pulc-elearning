@@ -190,7 +190,9 @@ test('admin configures YouTube, Canva, audio, explanations, and both evaluations
     .fill('Kelas dengan evaluasi awal dan akhir.');
   await dialog.getByLabel('Status publikasi').selectOption('published');
   await dialog.getByRole('button', { name: 'Materi 0', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Tambah materi' }).click();
+  await dialog
+    .getByRole('button', { name: 'Tambah materi', exact: true })
+    .click();
   let lesson = dialog.locator('.lesson-editor').nth(0);
   await lesson
     .getByLabel('Judul materi', { exact: true })
@@ -204,7 +206,9 @@ test('admin configures YouTube, Canva, audio, explanations, and both evaluations
   await lesson
     .getByLabel('Deskripsi / arahan materi (opsional)')
     .fill('Perhatikan langkah pertama pada video.');
-  await dialog.getByRole('button', { name: 'Tambah materi' }).click();
+  await dialog
+    .getByRole('button', { name: 'Tambah materi', exact: true })
+    .click();
   lesson = dialog.locator('.lesson-editor').nth(1);
   await lesson
     .getByLabel('Judul materi', { exact: true })
@@ -216,7 +220,9 @@ test('admin configures YouTube, Canva, audio, explanations, and both evaluations
   await lesson
     .getByLabel('Deskripsi / arahan materi (opsional)')
     .fill('Baca slide 1 sampai 3.');
-  await dialog.getByRole('button', { name: 'Tambah materi' }).click();
+  await dialog
+    .getByRole('button', { name: 'Tambah materi', exact: true })
+    .click();
   lesson = dialog.locator('.lesson-editor').nth(2);
   await lesson
     .getByLabel('Judul materi', { exact: true })

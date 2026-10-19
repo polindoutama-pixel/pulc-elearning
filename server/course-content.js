@@ -20,6 +20,7 @@ export function cleanHTML(value) {
       'br',
       'strong',
       'em',
+      'u',
       'ul',
       'ol',
       'li',

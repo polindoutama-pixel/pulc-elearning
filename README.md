@@ -42,6 +42,8 @@ Kredensial tersebut khusus demo. Data contoh dibuat hanya pada database kosong d
 
 - Ringkasan pembelajaran, progres departemen, dan penugasan terlambat.
 - Membuat/edit kelas, menyusun materi, mengunggah file, membuat kuis, dan pratinjau tanpa mencatat progres.
+- Editor rich text untuk artikel: judul/subjudul, tebal, miring, garis bawah, daftar poin/nomor, kutipan, tautan HTTPS/email, serta undo/redo tanpa mengetik HTML.
+- Tombol Tambah materi tersedia di atas dan setelah materi terakhir; materi baru langsung terlihat dan kolom judul mendapat fokus.
 - Draft, publikasi, arsip, duplikasi, dan pembatasan akses kelas berdasarkan departemen.
 - Membuat program dengan memilih kelas sesuai urutan.
 - Penugasan kelas/program berdasarkan departemen atau pilihan karyawan.
@@ -82,6 +84,7 @@ src/main.jsx          Antarmuka React dan alur admin/karyawan
 src/styles.css        Desain responsif
 src/ui.jsx            Komponen UI bersama
 src/editor-fields.jsx Editor materi multimedia dan evaluasi
+src/rich-text-editor.jsx Editor artikel visual (dimuat saat diperlukan)
 src/lesson-content.jsx Pemutar native/YouTube, embed Canva, dokumen, dan deskripsi
 src/api.js            Klien API dan navigasi
 shared/media.js       Validasi link provider dan metadata format
@@ -98,6 +101,14 @@ docs/OPERATIONS.md   Konfigurasi, backup, dan kebutuhan peluncuran
 ```
 
 Data SQLite, WAL, dan unggahan berada di `data/` secara default serta diabaikan Git. Gunakan checkout yang sudah tersedia; setiap tugas cloud sudah terisolasi sehingga tidak perlu membuat Git worktree baru.
+
+## Menulis artikel
+
+Pilih format **Teks / artikel**, lalu tulis langsung pada editor **Isi materi**. Gunakan menu paragraf untuk judul/subjudul dan toolbar untuk memformat teks yang dipilih. Tombol tautan menerima alamat HTTPS atau email dengan awalan `mailto:`; perubahan tidak mengumpulkan formulir kelas sebelum tombol **Simpan kelas** ditekan.
+
+Artikel lama yang disimpan sebagai HTML ditampilkan langsung dalam bentuk terformat. Membuka editor saja tidak menulis ulang isinya. Validasi dan sanitasi konten tetap dilakukan oleh server.
+
+Untuk menambah materi saat berada di bagian bawah daftar, gunakan tombol **Tambah materi** setelah materi terakhir. Tombol ini memakai alur yang sama dengan tombol atas dan mengarahkan fokus ke judul materi baru. Maksimal 100 materi per kelas.
 
 ## Pembaruan kelas dan evaluasi
 

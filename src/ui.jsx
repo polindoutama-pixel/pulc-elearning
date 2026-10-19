@@ -56,7 +56,7 @@ export function Modal({ title, children, onClose, wide = false }) {
       if (e.key === 'Escape') onClose();
       if (e.key === 'Tab') {
         const els = ref.current.querySelectorAll(
-          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
+          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [contenteditable="true"], a[href]',
         );
         const first = els[0],
           last = els[els.length - 1];
