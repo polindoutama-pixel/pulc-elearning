@@ -47,6 +47,22 @@ export function openDatabase(filename) {
       .some((c) => c.name === 'completed_at')
   )
     db.exec('ALTER TABLE progress ADD COLUMN completed_at TEXT');
+  if (
+    !db
+      .prepare('PRAGMA table_info(courses)')
+      .all()
+      .some((c) => c.name === 'pre_quiz')
+  )
+    db.exec('ALTER TABLE courses ADD COLUMN pre_quiz TEXT');
+  if (
+    !db
+      .prepare('PRAGMA table_info(attempts)')
+      .all()
+      .some((c) => c.name === 'phase')
+  )
+    db.exec(
+      "ALTER TABLE attempts ADD COLUMN phase TEXT NOT NULL DEFAULT 'post' CHECK(phase IN ('pre','post'))",
+    );
   db.exec(
     'UPDATE progress SET completed_at=updated_at WHERE complete=1 AND completed_at IS NULL',
   );

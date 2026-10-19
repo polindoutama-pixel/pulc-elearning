@@ -4435,3 +4435,192 @@ select {
 .lesson-nav small {
   overflow-wrap: anywhere;
 }
+.assessment-editor {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 22px;
+  margin-bottom: 24px;
+}
+.assessment-editor-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 20px;
+  color: var(--green);
+}
+.assessment-editor-heading h3 {
+  font-size: 16px;
+  line-height: 1.7;
+}
+.assessment-editor-heading p {
+  font-size: 11px;
+  line-height: 1.9;
+  color: #829276;
+  margin-top: 6px;
+}
+.assessment-editor-heading > svg {
+  margin-top: 4px;
+}
+.assessment-editor > .checkbox-label {
+  margin-bottom: 8px;
+}
+.assessment-editor > .form-grid {
+  margin-top: 20px;
+}
+.assessment-editor .lesson-editor {
+  margin-top: 18px;
+}
+.media-description {
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 25px;
+}
+.media-description .prose {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.media-description .prose p:first-child {
+  margin-top: 0;
+}
+.media-description .section-kicker {
+  margin-bottom: 12px;
+  font-size: 9px;
+}
+.media-link-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.media-external-link {
+  margin-top: 15px;
+}
+.media-help {
+  display: block;
+  color: #899b7a;
+  font-size: 10px;
+  line-height: 1.8;
+  margin: 10px 0;
+}
+.document-lesson {
+  text-align: center;
+  padding: 35px 24px;
+  background: #f5f7ef;
+  border: 1px solid #e0e8d7;
+  border-radius: 11px;
+}
+.document-icon {
+  width: 75px;
+  height: 75px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e6eddd;
+  border-radius: 18px;
+  color: #779263;
+  margin: 0 auto 20px;
+}
+.document-lesson h2 {
+  font-size: 21px;
+}
+.document-lesson p {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #819471;
+  margin: 15px auto 22px;
+  max-width: 420px;
+}
+.youtube-player,
+.canva-viewer {
+  aspect-ratio: 16/9;
+  width: 100%;
+  border: 0;
+  border-radius: 9px;
+  overflow: hidden;
+  background: #173e33;
+}
+.youtube-player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.audio-lesson {
+  padding: 24px;
+  background: #f2f5ec;
+  border: 1px solid #e3eadb;
+  border-radius: 12px;
+}
+.audio-lesson-heading {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 23px;
+}
+.audio-lesson-heading > span {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e1ead7;
+  border-radius: 50%;
+  color: #6d8858;
+}
+.audio-lesson-heading strong {
+  font-family: 'Manrope Variable', sans-serif;
+  font-size: 17px;
+}
+.audio-lesson-heading p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #879a77;
+  margin-top: 5px;
+}
+.audio-lesson audio {
+  width: 100%;
+  display: block;
+}
+.embed-error .button {
+  margin-bottom: 10px;
+}
+.lesson-nav small {
+  line-height: 1.8;
+}
+.pre-test-result > strong {
+  color: #829a66;
+}
+@media (max-width: 760px) {
+  .assessment-editor {
+    padding: 16px;
+  }
+  .assessment-editor-heading h3 {
+    font-size: 14px;
+  }
+  .assessment-editor-heading p {
+    font-size: 10px;
+  }
+  .audio-lesson {
+    padding: 18px;
+  }
+  .audio-lesson-heading strong {
+    font-size: 15px;
+  }
+  .audio-lesson-heading > span {
+    width: 48px;
+    height: 48px;
+  }
+  .media-description {
+    margin-top: 23px;
+    padding-top: 23px;
+  }
+  .media-link-row .button {
+    width: 100%;
+  }
+  .media-help {
+    font-size: 10px;
+  }
+  .canva-viewer {
+    min-height: 230px;
+  }
+}

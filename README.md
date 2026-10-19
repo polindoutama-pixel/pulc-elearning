@@ -30,10 +30,12 @@ Kredensial tersebut khusus demo. Data contoh dibuat hanya pada database kosong d
 - Beranda dengan penugasan, progres, dan akses melanjutkan belajar.
 - Program onboarding dengan susunan kelas dan tenggat.
 - Katalog dengan pencarian serta filter kategori.
-- Materi teks, video MP4/WebM, gambar PNG/JPEG/WebP, dan presentasi PDF.
+- Materi teks, video upload/link langsung/YouTube, audio, gambar, PDF, dokumen Word (DOC/DOCX), dan embed presentasi Canva.
+- Deskripsi, transkrip, atau arahan teks di bawah setiap materi multimedia; PDF dan Word dapat diunduh dengan nama file aslinya.
 - Urutan materi opsional, label modul/bagian, serta materi wajib/opsional.
-- Posisi video dan rentang tontonan unik tersimpan; kelulusan video membutuhkan cakupan 90%.
-- Kuis dinilai server dengan nilai minimum, batas percobaan, dan riwayat hasil.
+- Posisi dan rentang pemutaran unik video/audio tersimpan; penyelesaian membutuhkan cakupan 90%.
+- Pre-test opsional, sekali sebelum materi untuk mengukur kemampuan awal tanpa syarat nilai lulus.
+- Post-test opsional, setelah materi dengan nilai minimum, batas percobaan, dan penilaian server. Nilai awal dan akhir tersimpan terpisah.
 - Riwayat penyelesaian, pengingat penugasan dalam aplikasi, profil, dan perubahan kata sandi.
 
 **Dashboard admin**
@@ -44,7 +46,7 @@ Kredensial tersebut khusus demo. Data contoh dibuat hanya pada database kosong d
 - Membuat program dengan memilih kelas sesuai urutan.
 - Penugasan kelas/program berdasarkan departemen atau pilihan karyawan.
 - Membuat/edit/nonaktifkan akun, reset kata sandi, dan impor CSV dengan pratinjau serta validasi per baris.
-- Laporan progres/hasil, pencarian/filter, ekspor CSV, dan pemberian kesempatan kuis tambahan dengan alasan.
+- Laporan progres, nilai pre-test/post-test, perubahan nilai, pencarian/filter, ekspor CSV, dan pemberian kesempatan post-test tambahan dengan alasan.
 - Audit log perubahan penting.
 
 Akun baru wajib mengganti kata sandi awal. Kelas yang sudah memiliki peserta mempertahankan isi materi/kuis; gunakan duplikasi draft untuk revisi substansial. Arsip mempertahankan akses peserta lama dan riwayatnya. Penugasan ulang tidak mereset progres dan mempertahankan tenggat terdekat.
@@ -71,25 +73,39 @@ Pengujian API memakai database sementara yang terisolasi. Pengujian browser memu
 
 Playwright memakai `/usr/bin/chromium` bila tersedia. Di komputer lain, instal browser dengan `npx playwright install chromium`, atau atur `PLAYWRIGHT_CHROMIUM_PATH` ke executable yang tersedia. Pengunduhan browser membutuhkan akses ke domain distribusi Playwright. Fixture media sudah disimpan di `tests/fixtures`; ffmpeg tidak diperlukan untuk menjalankan tes.
 
-Cakupan pengujian mencakup autentikasi, hak akses, sanitasi konten, penilaian dan pembatasan kuis, impor, penugasan, unggahan, pembatasan departemen, riwayat penyelesaian, mode produksi, alur browser admin/karyawan, pemutaran video aktual, pembacaan gambar/PDF, dan navigasi ponsel.
+Cakupan pengujian mencakup autentikasi, hak akses, sanitasi konten/link embed, pre-test/post-test, impor, penugasan, unggahan, pembatasan departemen, migrasi hasil lama, mode produksi, alur admin/karyawan, pemutaran video/audio aktual, unduhan PDF/Word, dan navigasi ponsel. YouTube SDK dan Canva disimulasikan pada tes browser agar deterministik; tes tersebut tidak membuktikan ketersediaan atau izin embed konten pihak ketiga.
 
 ## Struktur proyek
 
 ```text
 src/main.jsx          Antarmuka React dan alur admin/karyawan
 src/styles.css        Desain responsif
+src/ui.jsx            Komponen UI bersama
+src/editor-fields.jsx Editor materi multimedia dan evaluasi
+src/lesson-content.jsx Pemutar native/YouTube, embed Canva, dokumen, dan deskripsi
+src/api.js            Klien API dan navigasi
+shared/media.js       Validasi link provider dan metadata format
 server/index.js       Inisialisasi dan lifecycle server
 server/app.js         API, sesi, otorisasi, unggahan, dan aturan belajar
+server/course-content.js Validasi dan sanitasi materi/evaluasi
 server/db.js          Skema, migrasi aditif, dan hashing kata sandi
 server/seed.js        Data demo atau inisialisasi admin produksi
 tests/api.test.js     Pengujian API/database
- tests/e2e/           Pengujian browser
- tests/fixtures/      Media kecil untuk pengujian
- docs/PRD.md          Spesifikasi produk dan batas versi awal
- docs/OPERATIONS.md   Konfigurasi, backup, dan kebutuhan peluncuran
+tests/e2e/           Pengujian browser
+tests/fixtures/      Media kecil untuk pengujian
+docs/PRD.md          Spesifikasi produk dan batas versi awal
+docs/OPERATIONS.md   Konfigurasi, backup, dan kebutuhan peluncuran
 ```
 
 Data SQLite, WAL, dan unggahan berada di `data/` secara default serta diabaikan Git. Gunakan checkout yang sudah tersedia; setiap tugas cloud sudah terisolasi sehingga tidak perlu membuat Git worktree baru.
+
+## Pembaruan kelas dan evaluasi
+
+Kuis pada database versi lama otomatis dipertahankan sebagai **post-test**. Migrasi menambahkan pre-test dan jenis percobaan secara aditif; nilai lama, progres, dan kesempatan tambahan tidak direset. Cadangkan data sebelum memperbarui deployment sesuai petunjuk operasional.
+
+Admin dapat mengaktifkan pre-test dan post-test secara independen melalui tab **Kuis**. Materi dibuka setelah pre-test dikumpulkan jika pre-test diaktifkan. Pre-test bernilai rendah tetap membuka materi; kelulusan kelas mengikuti materi wajib serta post-test jika diaktifkan. Untuk kelas yang telah memiliki peserta, gunakan **Duplikasikan ke draft** saat menambah/mengubah materi atau evaluasi.
+
+Video YouTube harus mengizinkan embed. Canva menggunakan link lihat/sematkan `https://www.canva.com/design/…/view`; peserta harus mempunyai izin melihat presentasinya. Embed eksternal membutuhkan koneksi ke provider. Lihat rincian domain jaringan pada [petunjuk operasional](docs/OPERATIONS.md).
 
 ## Status penggunaan
 

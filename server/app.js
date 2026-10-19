@@ -1,9 +1,11 @@
 import express from 'express';
 import { isDeepStrictEqual } from 'node:util';
 import multer from 'multer';
-import sanitizeHtml from 'sanitize-html';
+import { fileTypeFromFile } from 'file-type';
+import { validateLessons, validateQuiz, redactQuiz } from './course-content.js';
+import { isTrackedMedia } from '../shared/media.js';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
+import { mkdirSync, unlinkSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { checkPassword, hashPassword } from './db.js';
 const uid = () => randomBytes(12).toString('hex');
@@ -12,6 +14,7 @@ const parseCourse = (c) => ({
   ...c,
   lessons: JSON.parse(c.lessons),
   quiz: c.quiz ? JSON.parse(c.quiz) : null,
+  preQuiz: c.pre_quiz ? JSON.parse(c.pre_quiz) : null,
   audience: JSON.parse(c.audience || '[]'),
 });
 const fail = (status, message) => {
@@ -35,7 +38,7 @@ export function createApp(
   app.use((req, res, next) => {
     res.set({
       'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'same-origin',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
       'X-Frame-Options': 'SAMEORIGIN',
     });
     if (req.path.startsWith('/api')) res.set('Cache-Control', 'no-store');
@@ -181,36 +184,43 @@ export function createApp(
         c.audience.includes(u.department) ||
         enrollment(u.id, c.id))) ||
     (c.status === 'archived' && enrollment(u.id, c.id));
-  const publicCourse = (c, user) =>
-    user.role === 'admin'
-      ? c
-      : {
-          ...c,
-          quiz: c.quiz
-            ? {
-                ...c.quiz,
-                questions: c.quiz.questions.map(({ answer, ...q }) => q),
-              }
-            : null,
-        };
+  const publicCourse = (c, user) => {
+    const { pre_quiz, ...course } = c;
+    return user.role === 'admin'
+      ? course
+      : { ...course, quiz: redactQuiz(c.quiz), preQuiz: redactQuiz(c.preQuiz) };
+  };
   const summary = (userId, c) => {
     const progress = db
       .prepare('SELECT * FROM progress WHERE user_id=? AND course_id=?')
       .all(userId, c.id);
     const attempts = db
       .prepare(
-        'SELECT id,score,passed,created_at FROM attempts WHERE user_id=? AND course_id=? ORDER BY created_at,id',
+        "SELECT id,score,passed,created_at FROM attempts WHERE user_id=? AND course_id=? AND phase='post' ORDER BY created_at,id",
       )
       .all(userId, c.id);
+    const preAttempts = db
+      .prepare(
+        "SELECT id,score,created_at FROM attempts WHERE user_id=? AND course_id=? AND phase='pre' ORDER BY created_at,id",
+      )
+      .all(userId, c.id);
+    const preSubmitted = !c.preQuiz || preAttempts.length > 0;
     const needed = c.lessons.filter((l) => l.required !== false);
     const done = needed.filter((l) =>
       progress.some((p) => p.lesson_id === l.id && p.complete),
     ).length;
     const passed = !c.quiz || attempts.some((a) => a.passed);
-    const complete = needed.length > 0 && done === needed.length && passed;
-    const total = needed.length + (c.quiz ? 1 : 0);
+    const complete =
+      needed.length > 0 && done === needed.length && passed && preSubmitted;
+    const total = needed.length + (c.quiz ? 1 : 0) + (c.preQuiz ? 1 : 0);
     const percent = total
-      ? Math.round(((done + (c.quiz && passed ? 1 : 0)) / total) * 100)
+      ? Math.round(
+          ((done +
+            (c.quiz && passed ? 1 : 0) +
+            (c.preQuiz && preSubmitted ? 1 : 0)) /
+            total) *
+            100,
+        )
       : 0;
     const extra =
       db
@@ -222,7 +232,13 @@ export function createApp(
       courseId: c.id,
       percent,
       complete,
-      started: progress.length > 0 || attempts.length > 0,
+      started:
+        progress.length > 0 || attempts.length > 0 || preAttempts.length > 0,
+      preTest: {
+        submitted: preSubmitted,
+        attempts: preAttempts,
+        score: preAttempts[0]?.score ?? null,
+      },
       progress: progress.map((p) => ({ ...p, ranges: JSON.parse(p.ranges) })),
       attempts,
       remainingAttempts: c.quiz
@@ -286,6 +302,8 @@ export function createApp(
     const l = c.lessons.find((x) => x.id === req.body.lessonId);
     if (!l) fail(404, 'Materi tidak ditemukan.');
     const state = summary(req.user.id, c);
+    if (!state.preTest.submitted)
+      fail(400, 'Kerjakan pre-test sebelum mempelajari materi.');
     if (c.sequential) {
       const index = c.lessons.indexOf(l);
       if (
@@ -303,7 +321,7 @@ export function createApp(
     let ranges = old?.ranges || [],
       complete = old?.complete || 0,
       position = old?.position || 0;
-    if (l.type === 'video') {
+    if (isTrackedMedia(l)) {
       const { from, to } = req.body;
       if (
         !Number.isFinite(from) ||
@@ -313,7 +331,7 @@ export function createApp(
         to - from > 15 ||
         to > l.durationSeconds + 1
       )
-        fail(400, 'Rentang pemutaran video tidak valid.');
+        fail(400, 'Rentang pemutaran video/audio tidak valid.');
       ranges = [...ranges, [from, Math.min(to, l.durationSeconds)]].sort(
         (a, b) => a[0] - b[0],
       );
@@ -344,46 +362,75 @@ export function createApp(
     const c = getCourse(req.params.id);
     if (!canRead(req.user, c) || !enrollment(req.user.id, c.id))
       fail(403, 'Ikuti kelas terlebih dahulu.');
-    if (!c.quiz) fail(400, 'Kelas ini tidak memiliki kuis.');
-    const state = summary(req.user.id, c);
-    if (
-      c.lessons.some(
-        (l) =>
-          l.required !== false &&
-          !state.progress.some((p) => p.lesson_id === l.id && p.complete),
-      )
-    )
-      fail(400, 'Selesaikan seluruh materi wajib sebelum kuis.');
-    if (!state.remainingAttempts)
+    const phase = req.body.phase ?? 'post';
+    if (!['pre', 'post'].includes(phase))
+      fail(400, 'Jenis evaluasi tidak valid.');
+    const quiz = phase === 'pre' ? c.preQuiz : c.quiz;
+    if (!quiz)
       fail(
         400,
-        'Kesempatan kuis habis. Hubungi admin untuk percobaan tambahan.',
+        'Kelas ini tidak memiliki ' +
+          (phase === 'pre' ? 'pre-test.' : 'post-test.'),
       );
-    if (state.attempts.some((a) => a.passed))
-      fail(400, 'Anda sudah lulus kuis ini.');
+    const state = summary(req.user.id, c);
+    if (phase === 'pre') {
+      if (state.preTest.attempts.length)
+        fail(
+          400,
+          'Pre-test sudah dikumpulkan. Nilai awal tidak dapat diulang.',
+        );
+      if (state.started)
+        fail(
+          400,
+          'Pre-test hanya dapat dikerjakan sebelum pembelajaran dimulai.',
+        );
+    } else {
+      if (!state.preTest.submitted)
+        fail(400, 'Kerjakan pre-test terlebih dahulu.');
+      if (
+        c.lessons.some(
+          (l) =>
+            l.required !== false &&
+            !state.progress.some((p) => p.lesson_id === l.id && p.complete),
+        )
+      )
+        fail(400, 'Selesaikan seluruh materi wajib sebelum post-test.');
+      if (!state.remainingAttempts)
+        fail(
+          400,
+          'Kesempatan post-test habis. Hubungi admin untuk percobaan tambahan.',
+        );
+      if (state.attempts.some((a) => a.passed))
+        fail(400, 'Anda sudah lulus kuis ini.');
+    }
     const answers = req.body.answers;
     if (
       !Array.isArray(answers) ||
-      answers.length !== c.quiz.questions.length ||
+      answers.length !== quiz.questions.length ||
       answers.some(
         (a, i) =>
           !Number.isInteger(a) ||
           a < 0 ||
-          a >= c.quiz.questions[i].options.length,
+          a >= quiz.questions[i].options.length,
       )
     )
       fail(400, 'Jawab semua pertanyaan sebelum mengumpulkan.');
     const score = Math.round(
-      (c.quiz.questions.filter((q, i) => q.answer === answers[i]).length /
-        c.quiz.questions.length) *
+      (quiz.questions.filter((q, i) => q.answer === answers[i]).length /
+        quiz.questions.length) *
         100,
     );
-    const passed = score >= c.quiz.passScore;
+    const passed = phase === 'post' ? score >= quiz.passScore : null;
     db.prepare(
-      'INSERT INTO attempts(id,user_id,course_id,score,passed) VALUES(?,?,?,?,?)',
-    ).run(uid(), req.user.id, c.id, score, Number(passed));
-    audit(req.user.id, 'quiz.submitted', { courseId: c.id, score, passed });
-    res.json({ score, passed, summary: summary(req.user.id, c) });
+      'INSERT INTO attempts(id,user_id,course_id,score,passed,phase) VALUES(?,?,?,?,?,?)',
+    ).run(uid(), req.user.id, c.id, score, Number(passed), phase);
+    audit(req.user.id, 'quiz.submitted', {
+      courseId: c.id,
+      phase,
+      score,
+      passed,
+    });
+    res.json({ phase, score, passed, summary: summary(req.user.id, c) });
   });
   app.use('/api/admin', admin);
   const validateCourse = (body) => {
@@ -400,131 +447,11 @@ export function createApp(
       fail(400, 'Durasi kelas harus 1–6000 menit.');
     if (!['draft', 'published', 'archived'].includes(body.status))
       fail(400, 'Status kelas tidak valid.');
-    if (!Array.isArray(body.lessons) || body.lessons.length > 100)
-      fail(400, 'Daftar materi tidak valid (maksimal 100).');
-    const ids = new Set();
-    const lessons = body.lessons.map((l) => {
-      const id = cleanText(l.id, 80) || uid();
-      if (ids.has(id)) fail(400, 'ID materi duplikat.');
-      ids.add(id);
-      if (
-        !['text', 'video', 'image', 'pdf'].includes(l.type) ||
-        !cleanText(l.title, 150)
-      )
-        fail(400, 'Judul dan format setiap materi wajib diisi.');
-      const lesson = {
-        id,
-        title: cleanText(l.title, 150),
-        type: l.type,
-        required: l.required !== false,
-      };
-      if (cleanText(l.module, 100)) lesson.module = cleanText(l.module, 100);
-      if (l.type === 'text') {
-        lesson.body = sanitizeHtml(l.body || '', {
-          allowedTags: [
-            'h2',
-            'h3',
-            'h4',
-            'p',
-            'br',
-            'strong',
-            'em',
-            'ul',
-            'ol',
-            'li',
-            'blockquote',
-            'a',
-          ],
-          allowedAttributes: { a: ['href', 'target', 'rel'] },
-          allowedSchemes: ['https', 'mailto'],
-        });
-        if (
-          !sanitizeHtml(lesson.body, {
-            allowedTags: [],
-            allowedAttributes: {},
-          }).trim()
-        )
-          fail(400, 'Materi teks tidak boleh kosong.');
-      } else {
-        if (l.assetId) {
-          const file = db
-            .prepare('SELECT * FROM files WHERE id=?')
-            .get(l.assetId);
-          const types = {
-            video: ['video/mp4', 'video/webm'],
-            image: ['image/png', 'image/jpeg', 'image/webp'],
-            pdf: ['application/pdf'],
-          };
-          if (!file || !types[l.type].includes(file.mime))
-            fail(400, 'File materi tidak ditemukan atau format tidak sesuai.');
-          lesson.assetId = l.assetId;
-        } else if (
-          l.type === 'video' &&
-          typeof l.url === 'string' &&
-          l.url.startsWith('https://')
-        ) {
-          try {
-            new URL(l.url);
-          } catch {
-            fail(400, 'URL video tidak valid.');
-          }
-          lesson.url = l.url;
-        } else fail(400, 'Unggah file materi terlebih dahulu.');
-        if (l.type === 'video') {
-          lesson.durationSeconds = Number(l.durationSeconds);
-          if (
-            !Number.isFinite(lesson.durationSeconds) ||
-            lesson.durationSeconds < 1
-          )
-            fail(400, 'Isi durasi video dalam detik.');
-        }
-      }
-      return lesson;
-    });
+    const lessons = validateLessons(body.lessons, db);
     if (body.status === 'published' && !lessons.some((l) => l.required))
       fail(400, 'Tambahkan minimal satu materi wajib sebelum menerbitkan.');
-    let quiz = null;
-    if (body.quiz) {
-      const q = body.quiz;
-      if (
-        !Number.isInteger(Number(q.passScore)) ||
-        Number(q.passScore) < 1 ||
-        Number(q.passScore) > 100 ||
-        !Number.isInteger(Number(q.maxAttempts)) ||
-        Number(q.maxAttempts) < 1 ||
-        Number(q.maxAttempts) > 20 ||
-        !Array.isArray(q.questions) ||
-        !q.questions.length ||
-        q.questions.length > 100
-      )
-        fail(
-          400,
-          'Nilai kelulusan, batas percobaan, atau soal kuis tidak valid.',
-        );
-      quiz = {
-        passScore: Number(q.passScore),
-        maxAttempts: Number(q.maxAttempts),
-        questions: q.questions.map((question) => {
-          if (
-            !cleanText(question.text, 1000) ||
-            !Array.isArray(question.options) ||
-            question.options.length < 2 ||
-            question.options.length > 6 ||
-            question.options.some((o) => !cleanText(o, 500)) ||
-            !Number.isInteger(Number(question.answer)) ||
-            Number(question.answer) < 0 ||
-            Number(question.answer) >= question.options.length
-          )
-            fail(400, 'Lengkapi pertanyaan, pilihan, dan kunci jawaban kuis.');
-          return {
-            id: cleanText(question.id, 80) || uid(),
-            text: cleanText(question.text, 1000),
-            options: question.options.map((o) => cleanText(o, 500)),
-            answer: Number(question.answer),
-          };
-        }),
-      };
-    }
+    const quiz = validateQuiz(body.quiz),
+      preQuiz = validateQuiz(body.preQuiz, 'pre');
     if (
       body.audience !== undefined &&
       (!Array.isArray(body.audience) ||
@@ -555,13 +482,14 @@ export function createApp(
       sequential: body.sequential ? 1 : 0,
       lessons,
       quiz,
+      preQuiz,
     };
   };
   app.post('/api/admin/courses', (req, res) => {
     const c = validateCourse(req.body),
       id = uid();
     db.prepare(
-      'INSERT INTO courses(id,title,description,category,duration,cover,status,sequential,lessons,quiz,audience) VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO courses(id,title,description,category,duration,cover,status,sequential,lessons,quiz,audience,pre_quiz) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
     ).run(
       id,
       c.title,
@@ -574,6 +502,7 @@ export function createApp(
       JSON.stringify(c.lessons),
       c.quiz ? JSON.stringify(c.quiz) : null,
       JSON.stringify(c.audience),
+      c.preQuiz ? JSON.stringify(c.preQuiz) : null,
     );
     audit(req.user.id, 'course.created', {
       id,
@@ -592,6 +521,7 @@ export function createApp(
       hasEnrollment &&
       (!isDeepStrictEqual(c.lessons, old.lessons) ||
         !isDeepStrictEqual(c.quiz, old.quiz) ||
+        !isDeepStrictEqual(c.preQuiz, old.preQuiz) ||
         c.sequential !== old.sequential)
     )
       fail(
@@ -604,7 +534,7 @@ export function createApp(
         'Kelas yang memiliki peserta hanya dapat diterbitkan atau diarsipkan.',
       );
     db.prepare(
-      'UPDATE courses SET title=?,description=?,category=?,duration=?,cover=?,status=?,sequential=?,lessons=?,quiz=?,audience=? WHERE id=?',
+      'UPDATE courses SET title=?,description=?,category=?,duration=?,cover=?,status=?,sequential=?,lessons=?,quiz=?,audience=?,pre_quiz=? WHERE id=?',
     ).run(
       c.title,
       c.description,
@@ -616,6 +546,7 @@ export function createApp(
       JSON.stringify(c.lessons),
       c.quiz ? JSON.stringify(c.quiz) : null,
       JSON.stringify(c.audience),
+      c.preQuiz ? JSON.stringify(c.preQuiz) : null,
       old.id,
     );
     audit(req.user.id, 'course.updated', { id: old.id, status: c.status });
@@ -625,7 +556,7 @@ export function createApp(
     const c = getCourse(req.params.id),
       id = uid();
     db.prepare(
-      "INSERT INTO courses(id,title,description,category,duration,cover,status,sequential,lessons,quiz,audience) VALUES(?,?,?,?,?,?,'draft',?,?,?,?)",
+      "INSERT INTO courses(id,title,description,category,duration,cover,status,sequential,lessons,quiz,audience,pre_quiz) VALUES(?,?,?,?,?,?,'draft',?,?,?,?,?)",
     ).run(
       id,
       c.title + ' (salinan)',
@@ -637,6 +568,7 @@ export function createApp(
       JSON.stringify(c.lessons),
       c.quiz ? JSON.stringify(c.quiz) : null,
       JSON.stringify(c.audience),
+      c.preQuiz ? JSON.stringify(c.preQuiz) : null,
     );
     audit(req.user.id, 'course.duplicated', { id, from: c.id });
     res.status(201).json({ id });
@@ -883,6 +815,7 @@ export function createApp(
                 )
                 .map((p) => p.completed_at || p.updated_at),
               ...s.attempts.filter((a) => a.passed).map((a) => a.created_at),
+              ...s.preTest.attempts.map((a) => a.created_at),
             ]
               .sort()
               .at(-1)
@@ -899,6 +832,12 @@ export function createApp(
             : null,
           attemptCount: s.attempts.length,
           hasQuiz: !!c.quiz,
+          preScore: s.preTest.score,
+          preSubmitted: s.preTest.attempts.length > 0,
+          scoreImprovement:
+            s.preTest.score !== null && s.attempts.length
+              ? Math.max(...s.attempts.map((a) => a.score)) - s.preTest.score
+              : null,
           late: !!(e.due && e.due < today && !s.complete),
           completedAt,
           onTime:
@@ -941,7 +880,9 @@ export function createApp(
             ? 'Sedang dipelajari'
             : 'Belum dimulai',
       r.due,
+      r.preScore,
       r.score,
+      r.scoreImprovement,
       r.completedAt,
     ]);
     res
@@ -958,7 +899,9 @@ export function createApp(
               'Progres (%)',
               'Status',
               'Tenggat',
-              'Nilai terbaik',
+              'Nilai pre-test',
+              'Nilai post-test terbaik',
+              'Perubahan nilai',
               'Selesai pada',
             ],
             ...rows,
@@ -973,32 +916,42 @@ export function createApp(
     dest: uploadDir,
     limits: { fileSize: 100 * 1024 * 1024, files: 1 },
   });
-  app.post('/api/admin/uploads', upload.single('file'), (req, res) => {
+  app.post('/api/admin/uploads', upload.single('file'), async (req, res) => {
     if (!req.file) fail(400, 'Pilih file untuk diunggah.');
-    const f = req.file,
-      bytes = readFileSync(f.path).subarray(0, 16);
-    const mime =
-      bytes.subarray(0, 5).toString() === '%PDF-'
-        ? 'application/pdf'
-        : bytes
-              .subarray(0, 8)
-              .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-          ? 'image/png'
-          : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-            ? 'image/jpeg'
-            : bytes.subarray(0, 4).toString() === 'RIFF' &&
-                bytes.subarray(8, 12).toString() === 'WEBP'
-              ? 'image/webp'
-              : bytes.subarray(4, 8).toString() === 'ftyp'
-                ? 'video/mp4'
-                : bytes.subarray(0, 4).equals(Buffer.from([26, 69, 223, 163]))
-                  ? 'video/webm'
-                  : null;
-    if (!mime) {
+    const f = req.file;
+    let detected;
+    try {
+      detected = await fileTypeFromFile(f.path);
+    } catch {
+      /* truncated/invalid files are rejected below */
+    }
+    const types = new Set([
+      'application/pdf',
+      'image/png',
+      'image/jpeg',
+      'image/webp',
+      'video/mp4',
+      'video/webm',
+      'audio/mpeg',
+      'audio/wav',
+      'audio/ogg',
+      'audio/mp4',
+      'audio/webm',
+      'audio/flac',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]);
+    let mime = detected?.mime?.split(';')[0];
+    if (mime === 'audio/x-m4a') mime = 'audio/mp4';
+    if (
+      mime === 'application/x-cfb' &&
+      path.extname(f.originalname).toLowerCase() === '.doc'
+    )
+      mime = 'application/msword';
+    if (!types.has(mime) && mime !== 'application/msword') {
       unlinkSync(f.path);
       fail(
         400,
-        'Gunakan file PDF, PNG, JPEG, WebP, MP4, atau WebM yang valid.',
+        'Gunakan PDF, DOC/DOCX, PNG, JPEG, WebP, MP4, WebM, MP3, WAV, OGG, M4A, atau FLAC yang valid.',
       );
     }
     const id = uid();
@@ -1029,6 +982,16 @@ export function createApp(
             c.lessons.some((l) => l.assetId === file.id),
         );
     if (!canAccess) fail(403, 'Anda tidak memiliki akses ke materi ini.');
+    if (
+      req.query.download === '1' ||
+      [
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      ].includes(file.mime)
+    )
+      return res
+        .type(file.mime)
+        .download(path.join(uploadDir, file.filename), file.original_name);
     res
       .type(file.mime)
       .set(

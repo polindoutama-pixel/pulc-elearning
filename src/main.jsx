@@ -1,4 +1,22 @@
-import React, { useEffect, useRef, useState, useId } from 'react';
+import { api, navigate } from './api.js';
+import {
+  Button,
+  Badge,
+  Progress,
+  Empty,
+  Loading,
+  Modal,
+  Field,
+  ErrorMessage,
+} from './ui.jsx';
+import {
+  LessonFields,
+  QuizEditor,
+  readMediaDuration,
+} from './editor-fields.jsx';
+import { LessonContent } from './lesson-content.jsx';
+import { isTrackedMedia, lessonTypeLabels } from '../shared/media.js';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowRight,
@@ -15,7 +33,6 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
-  ChevronLeft,
   Play,
   PlayCircle,
   Check,
@@ -34,19 +51,14 @@ import {
   Upload,
   FileText,
   Image,
-  Video,
   Presentation,
   LockKeyhole,
-  MoreHorizontal,
   Pencil,
   Copy,
-  Archive,
   Trash2,
   AlertCircle,
   LoaderCircle,
   Monitor,
-  Mail,
-  User,
   ListChecks,
   Eye,
   RotateCcw,
@@ -61,6 +73,9 @@ const icons = {
   video: PlayCircle,
   image: Image,
   pdf: Presentation,
+  document: FileText,
+  canva: Presentation,
+  audio: PlayCircle,
 };
 const coverIcons = {
   company: Building2,
@@ -103,40 +118,6 @@ const initials = (name) =>
     .slice(0, 2)
     .map((x) => x[0])
     .join('') || 'PU';
-async function api(url, options = {}) {
-  const response = await fetch('/api' + url, {
-    credentials: 'same-origin',
-    ...options,
-    headers:
-      options.body instanceof FormData
-        ? {}
-        : { 'Content-Type': 'application/json', ...options.headers },
-    body:
-      options.body instanceof FormData
-        ? options.body
-        : options.body
-          ? JSON.stringify(options.body)
-          : undefined,
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    if (response.status === 401 && url !== '/auth/login')
-      window.dispatchEvent(new Event('pulc:unauthorized'));
-    const error = new Error(
-      data.error ||
-        data.errors?.map((e) => `Baris ${e.row}: ${e.error}`).join('\n') ||
-        'Permintaan gagal.',
-    );
-    error.status = response.status;
-    error.code = data.code;
-    throw error;
-  }
-  return data;
-}
-function navigate(route) {
-  window.location.hash = route;
-  window.scrollTo({ top: 0, behavior: 'instant' });
-}
 function useRoute() {
   const [route, setRoute] = useState(window.location.hash.slice(1) || '/');
   useEffect(() => {
@@ -145,134 +126,6 @@ function useRoute() {
     return () => window.removeEventListener('hashchange', f);
   }, []);
   return route;
-}
-function Button({
-  children,
-  icon: Icon,
-  variant = '',
-  className = '',
-  ...props
-}) {
-  return (
-    <button className={`button ${variant} ${className}`} {...props}>
-      {Icon && <Icon size={17} />} {children}
-    </button>
-  );
-}
-function Badge({ children, tone = '' }) {
-  return <span className={`badge ${tone}`}>{children}</span>;
-}
-function Progress({ value = 0 }) {
-  return (
-    <div className="progress-track">
-      <span style={{ width: `${value}%` }} />
-    </div>
-  );
-}
-function Empty({
-  title = 'Belum ada data',
-  text = 'Data akan muncul di sini setelah tersedia.',
-  action,
-}) {
-  return (
-    <div className="empty">
-      <div className="empty-icon">
-        <BookOpen size={28} />
-      </div>
-      <h3>{title}</h3>
-      <p>{text}</p>
-      {action}
-    </div>
-  );
-}
-function Loading() {
-  return (
-    <div className="loading">
-      <LoaderCircle size={26} className="spin" />
-      <span>Menyiapkan ruang belajar Anda…</span>
-    </div>
-  );
-}
-function Modal({ title, children, onClose, wide = false }) {
-  const ref = useRef();
-  useEffect(() => {
-    const previous = document.activeElement;
-    ref.current?.focus();
-    const handler = (e) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'Tab') {
-        const els = ref.current.querySelectorAll(
-          'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
-        );
-        const first = els[0],
-          last = els[els.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-    document.addEventListener('keydown', handler);
-    const old = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', handler);
-      document.body.style.overflow = old;
-      previous?.focus();
-    };
-  }, []);
-  return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <section
-        className={`modal ${wide ? 'wide' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-        ref={ref}
-        tabIndex={-1}
-      >
-        <div className="modal-heading">
-          <h2 id="modal-title">{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label="Tutup">
-            <X size={22} />
-          </button>
-        </div>
-        {children}
-      </section>
-    </div>
-  );
-}
-function Field({ label, children, hint }) {
-  const id = useId();
-  return (
-    <div className="field">
-      <label htmlFor={id}>{label}</label>
-      {React.Children.map(children, (child) =>
-        React.isValidElement(child) &&
-        ['input', 'textarea', 'select'].includes(child.type)
-          ? React.cloneElement(child, {
-              id,
-              'aria-describedby': hint ? id + '-hint' : undefined,
-            })
-          : child,
-      )}
-      {hint && <small id={id + '-hint'}>{hint}</small>}
-    </div>
-  );
-}
-function ErrorMessage({ message }) {
-  return message ? (
-    <div className="error-message" role="alert">
-      <AlertCircle size={17} />
-      <span>{message}</span>
-    </div>
-  ) : null;
 }
 function Brand({ light = false }) {
   return (
@@ -1488,6 +1341,20 @@ function CourseDetail({ id, data, run }) {
                 ? 'Materi dipelajari secara berurutan.'
                 : 'Pelajari materi dengan urutan pilihan Anda.'}
             </p>
+            {c.preQuiz && (
+              <div className="curriculum-row">
+                <span className="curriculum-number">
+                  <ListChecks size={18} />
+                </span>
+                <span>
+                  <strong>Pre-test · Evaluasi awal</strong>
+                  <small>
+                    {c.preQuiz.questions.length} soal · Sekali sebelum materi,
+                    tanpa syarat nilai lulus
+                  </small>
+                </span>
+              </div>
+            )}
             {c.lessons.map((l, i) => {
               const Icon = icons[l.type];
               return (
@@ -1500,13 +1367,7 @@ function CourseDetail({ id, data, run }) {
                     <strong>{l.title}</strong>
                     <small>
                       {l.module ? l.module + ' · ' : ''}
-                      {l.type === 'text'
-                        ? 'Bacaan'
-                        : l.type === 'video'
-                          ? 'Video'
-                          : l.type === 'pdf'
-                            ? 'Presentasi / PDF'
-                            : 'Gambar'}
+                      {lessonTypeLabels[l.type] || 'Materi'}
                       {l.required !== false ? ' · Wajib' : ' · Opsional'}
                     </small>
                   </span>
@@ -1522,7 +1383,7 @@ function CourseDetail({ id, data, run }) {
                   <ListChecks size={18} />
                 </span>
                 <span>
-                  <strong>Evaluasi pembelajaran</strong>
+                  <strong>Post-test · Evaluasi akhir</strong>
                   <small>
                     {c.quiz.questions.length} soal · Nilai minimum{' '}
                     {c.quiz.passScore}
@@ -1602,24 +1463,18 @@ function CourseDetail({ id, data, run }) {
 }
 function Player({ id, data, reload, notify, preview = false }) {
   const c = data.courses.find((c) => c.id === id),
-    s = data.summaries.find((s) => s.courseId === id),
-    enrolled = data.enrollments.some((e) => e.course_id === id);
-  const [selected, setSelected] = useState(
-      () =>
-        c?.lessons.find(
+    s = data.summaries.find((s) => s.courseId === id);
+  const [selected, setSelected] = useState(() =>
+    c?.preQuiz && (preview || !s?.preTest?.submitted)
+      ? 'pre-test'
+      : c?.lessons.find(
           (l) => !s?.progress.some((p) => p.lesson_id === l.id && p.complete),
-        )?.id || c?.lessons[0]?.id,
-    ),
-    [busy, setBusy] = useState(false),
-    [answers, setAnswers] = useState({}),
-    [result, setResult] = useState(null),
+        )?.id || (c?.quiz ? 'quiz' : c?.lessons[0]?.id),
+  );
+  const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const video = useRef(null),
-    lastTime = useRef(0),
-    sentTime = useRef(0),
-    sending = useRef(false);
   if (!c) return <Empty title="Kelas tidak ditemukan" />;
-  if (!enrolled && !preview)
+  if (!preview && !data.enrollments.some((e) => e.course_id === id))
     return (
       <Empty
         title="Ikuti kelas terlebih dahulu"
@@ -1628,21 +1483,34 @@ function Player({ id, data, reload, notify, preview = false }) {
         }
       />
     );
-  const lesson = c.lessons.find((l) => l.id === selected),
-    allDone = c.lessons
-      .filter((l) => l.required !== false)
-      .every((l) => s.progress.some((p) => p.lesson_id === l.id && p.complete)),
-    quiz = selected === 'quiz';
+  const isPre = selected === 'pre-test',
+    isPost = selected === 'quiz',
+    assessment = isPre || isPost,
+    lesson = c.lessons.find((l) => l.id === selected);
+  const preDone = !c.preQuiz || s.preTest.submitted;
+  const allDone = c.lessons
+    .filter((l) => l.required !== false)
+    .every((l) => s.progress.some((p) => p.lesson_id === l.id && p.complete));
   const isLocked = (l) =>
     !preview &&
-    c.sequential &&
-    c.lessons
-      .slice(0, c.lessons.indexOf(l))
-      .some(
-        (x) =>
-          x.required !== false &&
-          !s.progress.some((p) => p.lesson_id === x.id && p.complete),
-      );
+    (!preDone ||
+      (c.sequential &&
+        c.lessons
+          .slice(0, c.lessons.indexOf(l))
+          .some(
+            (x) =>
+              x.required !== false &&
+              !s.progress.some((p) => p.lesson_id === x.id && p.complete),
+          )));
+  const next = () => {
+    const after = c.lessons[c.lessons.indexOf(lesson) + 1];
+    if (after) setSelected(after.id);
+    else if (c.quiz) setSelected('quiz');
+    else if (preview) navigate('/admin/courses');
+    else {
+      notify('Selamat! Kelas berhasil diselesaikan.');
+    }
+  };
   const complete = async () => {
     setBusy(true);
     setError('');
@@ -1652,69 +1520,34 @@ function Player({ id, data, reload, notify, preview = false }) {
         body: { lessonId: lesson.id },
       });
       await reload();
-      const next = c.lessons[c.lessons.indexOf(lesson) + 1];
-      if (next) setSelected(next.id);
-      else if (c.quiz) setSelected('quiz');
-      else notify('Selamat! Kelas berhasil diselesaikan.');
+      next();
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
   };
-  const submitQuiz = async (e) => {
-    e.preventDefault();
-    setBusy(true);
+  const saveSegment = async (segment) => {
+    await api('/courses/' + id + '/progress', {
+      method: 'POST',
+      body: { lessonId: lesson.id, ...segment },
+    });
     setError('');
-    try {
-      const r = await api('/courses/' + id + '/quiz', {
-        method: 'POST',
-        body: { answers: c.quiz.questions.map((q) => answers[q.id]) },
-      });
-      setResult(r);
-      await reload();
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
+    await reload();
   };
-  const timeUpdate = async (force = false) => {
-    if (preview) return;
-    const current = video.current?.currentTime || 0;
-    if (current < lastTime.current || current - lastTime.current > 2.5) {
-      sentTime.current = current;
-      lastTime.current = current;
-      return;
-    }
-    lastTime.current = current;
-    if (
-      (current - sentTime.current >= 5 ||
-        (force && current > sentTime.current)) &&
-      !sending.current
-    ) {
-      const from = sentTime.current;
-      sentTime.current = current;
-      sending.current = true;
-      try {
-        await api('/courses/' + id + '/progress', {
-          method: 'POST',
-          body: { lessonId: lesson.id, from, to: current },
-        });
-        await reload();
-      } catch (e) {
-        sentTime.current = from;
-        setError(e.message);
-      } finally {
-        sending.current = false;
-      }
-    }
+  const change = (id) => {
+    setSelected(id);
+    setError('');
   };
+  const lessonDone = s.progress.some(
+    (p) => p.lesson_id === lesson?.id && p.complete,
+  );
   return (
     <>
       <div className="player-top">
         <button className="back-link" onClick={() => navigate('/course/' + id)}>
-          <ArrowLeft size={16} /> Detail kelas
+          <ArrowLeft size={16} />
+          Detail kelas
         </button>
         <span>{c.title}</span>
         <Badge tone="green">
@@ -1727,234 +1560,65 @@ function Player({ id, data, reload, notify, preview = false }) {
         <section className="lesson-panel">
           <div className="lesson-panel-header">
             <Badge tone="green">
-              {quiz
-                ? 'EVALUASI'
-                : `MATERI ${c.lessons.indexOf(lesson) + 1} / ${c.lessons.length}`}
+              {isPre
+                ? 'PRE-TEST'
+                : isPost
+                  ? 'POST-TEST'
+                  : `MATERI ${c.lessons.indexOf(lesson) + 1} / ${c.lessons.length}`}
             </Badge>
-            <h1>{quiz ? 'Uji pemahaman Anda' : lesson?.title}</h1>
+            <h1>
+              {isPre
+                ? 'Kenali pemahaman awal Anda'
+                : isPost
+                  ? 'Uji pemahaman Anda'
+                  : lesson?.title}
+            </h1>
           </div>
           <ErrorMessage message={error} />
-          {quiz ? (
-            preview ? (
-              <div className="quiz-content">
-                <div className="info-note">
-                  <Eye size={18} /> Pratinjau admin. Jawaban benar ditampilkan
-                  dan tidak dinilai.
-                </div>
-                {c.quiz.questions.map((q, i) => (
-                  <div className="quiz-question" key={q.id}>
-                    <h3>
-                      {i + 1}. {q.text}
-                    </h3>
-                    {q.options.map((o, j) => (
-                      <div
-                        key={j}
-                        className={
-                          'quiz-option ' + (q.answer === j ? 'selected' : '')
-                        }
-                      >
-                        {q.answer === j ? (
-                          <CheckCircle2 size={17} />
-                        ) : (
-                          <span>○</span>
-                        )}
-                        {o}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : !allDone ? (
-              <Empty
-                title="Selesaikan materi terlebih dahulu"
-                text="Kuis terbuka setelah seluruh materi wajib selesai."
-              />
-            ) : s.attempts.some((a) => a.passed) ? (
-              <div className="quiz-success">
-                <div>
-                  <Award size={48} />
-                </div>
-                <Badge tone="green">KELAS SELESAI</Badge>
-                <h2>Selamat, Anda berhasil!</h2>
-                <p>
-                  Anda telah menyelesaikan seluruh materi dan lulus evaluasi
-                  kelas ini.
-                </p>
-                <strong>
-                  {Math.max(...s.attempts.map((a) => a.score))}
-                  <small>/100</small>
-                </strong>
-                <Button onClick={() => navigate('/history')}>
-                  Lihat pencapaian saya <ArrowRight size={16} />
-                </Button>
-              </div>
-            ) : (
-              <div className="quiz-content">
-                <div className="quiz-info">
-                  <span>
-                    <ListChecks size={17} />
-                    {c.quiz.questions.length} pertanyaan
-                  </span>
-                  <span>Nilai minimum: {c.quiz.passScore}</span>
-                  <span>Sisa percobaan: {s.remainingAttempts}</span>
-                </div>
-                {result && (
-                  <div className="info-note">
-                    <AlertCircle size={20} />
-                    <span>
-                      Nilai Anda <strong>{result.score}</strong>. Nilai minimum
-                      kelulusan {c.quiz.passScore}. Pelajari kembali materi
-                      sebelum mencoba lagi.
-                    </span>
-                  </div>
-                )}
-                {s.remainingAttempts > 0 ? (
-                  <form onSubmit={submitQuiz}>
-                    {c.quiz.questions.map((q, i) => (
-                      <fieldset className="quiz-question" key={q.id}>
-                        <legend>
-                          <span>{i + 1}.</span> {q.text}
-                        </legend>
-                        {q.options.map((option, j) => (
-                          <label
-                            key={j}
-                            className={`quiz-option ${answers[q.id] === j ? 'selected' : ''}`}
-                          >
-                            <input
-                              type="radio"
-                              required
-                              name={q.id}
-                              checked={answers[q.id] === j}
-                              onChange={() =>
-                                setAnswers({ ...answers, [q.id]: j })
-                              }
-                            />
-                            <span>{option}</span>
-                          </label>
-                        ))}
-                      </fieldset>
-                    ))}
-                    <Button
-                      disabled={
-                        busy ||
-                        c.quiz.questions.some(
-                          (q) => answers[q.id] === undefined,
-                        )
-                      }
-                      type="submit"
-                      icon={CheckCheck}
-                    >
-                      {busy ? 'Menilai…' : 'Kumpulkan jawaban'}
-                    </Button>
-                  </form>
-                ) : (
-                  <Empty
-                    title="Kesempatan kuis habis"
-                    text="Hubungi admin HR untuk meminta kesempatan tambahan."
-                  />
-                )}
-              </div>
-            )
+          {assessment ? (
+            <Assessment
+              key={selected}
+              phase={isPre ? 'pre' : 'post'}
+              course={c}
+              summary={s}
+              preview={preview}
+              available={isPre || (preDone && allDone)}
+              reload={reload}
+              onContinue={() => change(c.lessons[0]?.id)}
+            />
+          ) : !preview && isLocked(lesson) ? (
+            <Empty
+              title="Selesaikan tahap sebelumnya"
+              text="Kerjakan pre-test dan materi wajib sebelumnya untuk melanjutkan."
+            />
           ) : (
             <>
               <div className="lesson-content">
-                {lesson?.type === 'text' && (
-                  <article
-                    className="prose"
-                    dangerouslySetInnerHTML={{ __html: lesson.body }}
-                  />
-                )}
-                {lesson?.type === 'image' && (
-                  <img
-                    className="lesson-image"
-                    src={'/api/files/' + lesson.assetId}
-                    alt={lesson.title}
-                  />
-                )}
-                {lesson?.type === 'pdf' && (
-                  <>
-                    <iframe
-                      title={lesson.title}
-                      className="pdf-viewer"
-                      src={'/api/files/' + lesson.assetId}
-                    />
-                    <a
-                      href={'/api/files/' + lesson.assetId}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-link"
-                    >
-                      Buka PDF di tab baru <ArrowUpRight size={15} />
-                    </a>
-                  </>
-                )}
-                {lesson?.type === 'video' && (
-                  <>
-                    <video
-                      key={lesson.id}
-                      ref={video}
-                      controls
-                      controlsList="nodownload"
-                      onLoadedMetadata={() => {
-                        const p =
-                          s.progress.find((p) => p.lesson_id === lesson.id)
-                            ?.position || 0;
-                        video.current.currentTime = p;
-                        lastTime.current = p;
-                        sentTime.current = p;
-                      }}
-                      onSeeking={() => {
-                        lastTime.current = video.current.currentTime;
-                        sentTime.current = video.current.currentTime;
-                      }}
-                      onTimeUpdate={() => timeUpdate()}
-                      onPause={() => timeUpdate(true)}
-                      onEnded={() => timeUpdate(true)}
-                      src={
-                        lesson.assetId
-                          ? '/api/files/' + lesson.assetId
-                          : lesson.url
-                      }
-                    />
-                    <div className="info-note">
-                      <PlayCircle size={18} /> Tonton minimal 90% video. Progres
-                      disimpan berdasarkan bagian video yang diputar.
-                    </div>
-                  </>
-                )}
+                <LessonContent
+                  key={lesson?.id}
+                  lesson={lesson}
+                  preview={preview}
+                  position={
+                    s.progress.find((p) => p.lesson_id === lesson?.id)
+                      ?.position || 0
+                  }
+                  onSegment={saveSegment}
+                  onError={setError}
+                />
               </div>
               <div className="lesson-actions">
                 <span>
-                  <ShieldCheck size={16} />{' '}
+                  <ShieldCheck size={16} />
                   {preview
                     ? 'Mode pratinjau admin'
                     : 'Progres disimpan di akun Anda'}
                 </span>
                 {preview ? (
-                  <Button
-                    onClick={() => {
-                      const next = c.lessons[c.lessons.indexOf(lesson) + 1];
-                      if (next) setSelected(next.id);
-                      else if (c.quiz) setSelected('quiz');
-                      else navigate('/admin/courses');
-                    }}
-                  >
+                  <Button onClick={next}>
                     Lanjutkan pratinjau <ArrowRight size={17} />
                   </Button>
-                ) : lesson?.type === 'video' ? (
-                  <Button
-                    disabled={
-                      !s.progress.some(
-                        (p) => p.lesson_id === lesson.id && p.complete,
-                      )
-                    }
-                    onClick={() => {
-                      const next = c.lessons[c.lessons.indexOf(lesson) + 1];
-                      if (next) setSelected(next.id);
-                      else if (c.quiz) setSelected('quiz');
-                      else navigate('/history');
-                    }}
-                  >
+                ) : isTrackedMedia(lesson) ? (
+                  <Button disabled={!lessonDone} onClick={next}>
                     Materi berikutnya <ArrowRight size={17} />
                   </Button>
                 ) : (
@@ -1973,23 +1637,42 @@ function Player({ id, data, reload, notify, preview = false }) {
             <span>{s.percent}%</span>
           </div>
           <Progress value={s.percent} />
+          {c.preQuiz && (
+            <button
+              className={`lesson-nav ${isPre ? 'active' : ''}`}
+              onClick={() => change('pre-test')}
+            >
+              <span
+                className={
+                  'lesson-status ' + (s.preTest.attempts.length ? 'done' : '')
+                }
+              >
+                {s.preTest.attempts.length ? (
+                  <Check size={16} />
+                ) : (
+                  <ListChecks size={17} />
+                )}
+              </span>
+              <span>
+                <small>EVALUASI AWAL</small>
+                <strong>Pre-test</strong>
+              </span>
+            </button>
+          )}
           {c.lessons.map((l, i) => {
             const done = s.progress.some(
                 (p) => p.lesson_id === l.id && p.complete,
               ),
               locked = isLocked(l),
-              Icon = icons[l.type];
+              Icon = icons[l.type] || FileText;
             return (
               <button
                 key={l.id}
                 disabled={locked}
                 className={`lesson-nav ${selected === l.id ? 'active' : ''}`}
-                onClick={() => {
-                  setSelected(l.id);
-                  setError('');
-                }}
+                onClick={() => change(l.id)}
               >
-                <span className={`lesson-status ${done ? 'done' : ''}`}>
+                <span className={'lesson-status ' + (done ? 'done' : '')}>
                   {locked ? (
                     <LockKeyhole size={15} />
                   ) : done ? (
@@ -2010,16 +1693,25 @@ function Player({ id, data, reload, notify, preview = false }) {
           })}
           {c.quiz && (
             <button
-              disabled={!allDone && !preview}
-              className={`lesson-nav ${quiz ? 'active' : ''}`}
-              onClick={() => setSelected('quiz')}
+              disabled={!preview && (!preDone || !allDone)}
+              className={`lesson-nav ${isPost ? 'active' : ''}`}
+              onClick={() => change('quiz')}
             >
-              <span className="lesson-status">
-                {allDone ? <ListChecks size={17} /> : <LockKeyhole size={15} />}
+              <span
+                className={
+                  'lesson-status ' +
+                  (s.attempts.some((a) => a.passed) ? 'done' : '')
+                }
+              >
+                {preDone && allDone ? (
+                  <ListChecks size={17} />
+                ) : (
+                  <LockKeyhole size={15} />
+                )}
               </span>
               <span>
                 <small>EVALUASI AKHIR</small>
-                <strong>Kuis pembelajaran</strong>
+                <strong>Post-test · Kuis pembelajaran</strong>
               </span>
             </button>
           )}
@@ -2030,6 +1722,203 @@ function Player({ id, data, reload, notify, preview = false }) {
         </aside>
       </div>
     </>
+  );
+}
+function Assessment({
+  phase,
+  course: c,
+  summary: s,
+  preview,
+  available,
+  reload,
+  onContinue,
+}) {
+  const pre = phase === 'pre',
+    quiz = pre ? c.preQuiz : c.quiz,
+    attempts = pre ? s.preTest.attempts : s.attempts;
+  const [answers, setAnswers] = useState({}),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [result, setResult] = useState(null);
+  if (!quiz) return <Empty title="Evaluasi tidak tersedia" />;
+  if (preview)
+    return (
+      <div className="quiz-content">
+        <div className="info-note">
+          <Eye size={18} />
+          Pratinjau admin. Jawaban benar ditampilkan dan tidak dinilai.
+        </div>
+        {quiz.questions.map((q, i) => (
+          <div className="quiz-question" key={q.id}>
+            <h3>
+              {i + 1}. {q.text}
+            </h3>
+            {q.options.map((o, j) => (
+              <div
+                key={j}
+                className={'quiz-option ' + (q.answer === j ? 'selected' : '')}
+              >
+                {q.answer === j ? <CheckCircle2 size={17} /> : <span>○</span>}
+                {o}
+              </div>
+            ))}
+          </div>
+        ))}
+        {pre && (
+          <Button onClick={onContinue}>
+            Lanjutkan pratinjau <ArrowRight size={16} />
+          </Button>
+        )}
+      </div>
+    );
+  if (!available)
+    return (
+      <Empty
+        title="Selesaikan materi terlebih dahulu"
+        text="Post-test terbuka setelah pre-test dan seluruh materi wajib selesai."
+      />
+    );
+  if (pre && attempts.length)
+    return (
+      <div className="quiz-success pre-test-result">
+        <div>
+          <ListChecks size={45} />
+        </div>
+        <Badge tone="green">PRE-TEST TERSIMPAN</Badge>
+        <h2>Pemahaman awal Anda sudah tercatat</h2>
+        <p>
+          Nilai ini menjadi gambaran awal, bukan syarat kelulusan. Sekarang,
+          pelajari materi untuk meningkatkan pemahaman Anda.
+        </p>
+        <strong>
+          {s.preTest.score}
+          <small>/100</small>
+        </strong>
+        <Button onClick={onContinue}>
+          Lanjutkan ke materi <ArrowRight size={16} />
+        </Button>
+      </div>
+    );
+  if (!pre && attempts.some((a) => a.passed))
+    return (
+      <div className="quiz-success">
+        <div>
+          <Award size={48} />
+        </div>
+        <Badge tone="green">KELAS SELESAI</Badge>
+        <h2>Selamat, Anda berhasil!</h2>
+        <p>
+          Anda telah menyelesaikan seluruh materi dan lulus post-test kelas ini.
+        </p>
+        <strong>
+          {Math.max(...attempts.map((a) => a.score))}
+          <small>/100</small>
+        </strong>
+        {c.preQuiz && (
+          <p>
+            Nilai pre-test: <b>{s.preTest.score}</b> · Nilai post-test terbaik:{' '}
+            <b>{Math.max(...attempts.map((a) => a.score))}</b>
+          </p>
+        )}
+        <Button onClick={() => navigate('/history')}>
+          Lihat pencapaian saya <ArrowRight size={16} />
+        </Button>
+      </div>
+    );
+  const remaining = pre ? 1 : s.remainingAttempts;
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api('/courses/' + c.id + '/quiz', {
+        method: 'POST',
+        body: { phase, answers: quiz.questions.map((q) => answers[q.id]) },
+      });
+      setResult(r);
+      await reload();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="quiz-content">
+      <div className="quiz-info">
+        <span>
+          <ListChecks size={17} />
+          {quiz.questions.length} pertanyaan
+        </span>
+        {pre ? (
+          <span>Sekali · Tanpa syarat nilai lulus</span>
+        ) : (
+          <>
+            <span>Nilai minimum: {quiz.passScore}</span>
+            <span>Sisa percobaan: {remaining}</span>
+          </>
+        )}
+      </div>
+      {pre && (
+        <div className="info-note">
+          <AlertCircle size={18} />
+          Jawab sesuai pemahaman Anda saat ini. Setelah dikumpulkan, nilai awal
+          disimpan dan materi terbuka.
+        </div>
+      )}
+      <ErrorMessage message={error} />
+      {result && !pre && (
+        <div className="info-note">
+          <AlertCircle size={20} />
+          <span>
+            Nilai Anda <strong>{result.score}</strong>. Nilai minimum kelulusan{' '}
+            {quiz.passScore}. Pelajari kembali materi sebelum mencoba lagi.
+          </span>
+        </div>
+      )}
+      {remaining > 0 ? (
+        <form onSubmit={submit}>
+          {quiz.questions.map((q, i) => (
+            <fieldset className="quiz-question" key={q.id}>
+              <legend>
+                <span>{i + 1}.</span> {q.text}
+              </legend>
+              {q.options.map((option, j) => (
+                <label
+                  key={j}
+                  className={
+                    'quiz-option ' + (answers[q.id] === j ? 'selected' : '')
+                  }
+                >
+                  <input
+                    type="radio"
+                    required
+                    name={q.id}
+                    checked={answers[q.id] === j}
+                    onChange={() => setAnswers({ ...answers, [q.id]: j })}
+                  />
+                  <span>{option}</span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+          <Button
+            disabled={
+              busy || quiz.questions.some((q) => answers[q.id] === undefined)
+            }
+            type="submit"
+            icon={CheckCheck}
+          >
+            {busy ? 'Menilai…' : 'Kumpulkan jawaban'}
+          </Button>
+        </form>
+      ) : (
+        <Empty
+          title="Kesempatan kuis habis"
+          text="Hubungi admin HR untuk meminta kesempatan tambahan."
+        />
+      )}
+    </div>
   );
 }
 function Profile({ user, onSaved, notify, required = false }) {
@@ -2808,7 +2697,8 @@ function ReportTable({ rows, loading, onExtra }) {
             <th>Progres</th>
             <th>Status</th>
             <th>Tenggat</th>
-            <th>Nilai</th>
+            <th>Pre-test</th>
+            <th>Post-test</th>
             {onExtra && <th>Aksi</th>}
           </tr>
         </thead>
@@ -2850,6 +2740,10 @@ function ReportTable({ rows, loading, onExtra }) {
                 </Badge>
               </td>
               <td className="nowrap">{date(r.due)}</td>
+              <td>
+                <strong>{r.preScore ?? '—'}</strong>
+                <small>{r.preSubmitted ? 'Evaluasi awal' : ''}</small>
+              </td>
               <td>
                 <strong>{r.score ?? '—'}</strong>
                 <small>
@@ -3006,6 +2900,7 @@ function CourseEditor({ course, departments, onClose, onSave }) {
             audience: [],
             lessons: [],
             quiz: null,
+            preQuiz: null,
           },
     ),
     [tab, setTab] = useState('Informasi'),
@@ -3013,23 +2908,34 @@ function CourseEditor({ course, departments, onClose, onSave }) {
     [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(null);
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
-  const updateLesson = (i, key, value) =>
-    setForm((f) => ({
-      ...f,
-      lessons: f.lessons.map((l, j) => (j === i ? { ...l, [key]: value } : l)),
-    }));
   const upload = async (i, file) => {
     if (!file) return;
+    const target = form.lessons[i];
     setUploading(i);
     setError('');
     try {
       const fd = new FormData();
       fd.append('file', file);
-      const r = await api('/admin/uploads', { method: 'POST', body: fd });
+      const [r, duration] = await Promise.all([
+        api('/admin/uploads', { method: 'POST', body: fd }),
+        isTrackedMedia(target)
+          ? readMediaDuration(file, target.type)
+          : Promise.resolve(null),
+      ]);
       setForm((f) => ({
         ...f,
         lessons: f.lessons.map((l, j) =>
-          j === i ? { ...l, assetId: r.id, fileName: r.name, url: '' } : l,
+          l.id === target.id && l.type === target.type
+            ? {
+                ...l,
+                assetId: r.id,
+                fileName: r.name,
+                url: '',
+                provider: undefined,
+                source: 'upload',
+                ...(duration ? { durationSeconds: duration } : {}),
+              }
+            : l,
         ),
       }));
     } catch (e) {
@@ -3038,13 +2944,6 @@ function CourseEditor({ course, departments, onClose, onSave }) {
       setUploading(null);
     }
   };
-  const updateQuiz = (key, value) =>
-    set('quiz', { ...form.quiz, [key]: value });
-  const updateQuestion = (i, key, value) =>
-    updateQuiz(
-      'questions',
-      form.quiz.questions.map((q, j) => (j === i ? { ...q, [key]: value } : q)),
-    );
   const submit = async (e) => {
     e.preventDefault();
     setError('');
@@ -3057,7 +2956,7 @@ function CourseEditor({ course, departments, onClose, onSave }) {
           body:
             l.type === 'text' && !/<[a-z][\s\S]*>/i.test(l.body || '')
               ? '<p>' +
-                l.body
+                (l.body || '')
                   .replaceAll('&', '&amp;')
                   .replaceAll('<', '&lt;')
                   .replaceAll('>', '&gt;')
@@ -3293,130 +3192,20 @@ function CourseEditor({ course, departments, onClose, onSave }) {
                     </button>
                   </div>
                 </div>
-                <Field label="Modul / bagian (opsional)">
-                  <input
-                    value={l.module || ''}
-                    placeholder="Misalnya: Pengenalan Perusahaan"
-                    onChange={(e) => updateLesson(i, 'module', e.target.value)}
-                  />
-                </Field>
-                <div className="form-grid">
-                  <Field label="Judul materi">
-                    <input
-                      value={l.title}
-                      onChange={(e) => updateLesson(i, 'title', e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Format">
-                    <select
-                      value={l.type}
-                      onChange={(e) => {
-                        setForm((f) => ({
-                          ...f,
-                          lessons: f.lessons.map((x, j) =>
-                            i === j
-                              ? {
-                                  id: x.id,
-                                  title: x.title,
-                                  type: e.target.value,
-                                  required: x.required,
-                                  module: x.module,
-                                  body: '',
-                                  durationSeconds: 60,
-                                }
-                              : x,
-                          ),
-                        }));
-                      }}
-                    >
-                      <option value="text">Teks / artikel</option>
-                      <option value="video">Video</option>
-                      <option value="image">Gambar</option>
-                      <option value="pdf">Presentasi / PDF</option>
-                    </select>
-                  </Field>
-                </div>
-                {l.type === 'text' ? (
-                  <Field
-                    label="Isi materi"
-                    hint="Tulis teks biasa atau HTML sederhana: paragraf, judul, daftar, dan tautan HTTPS."
-                  >
-                    <textarea
-                      rows={7}
-                      value={l.body || ''}
-                      onChange={(e) => updateLesson(i, 'body', e.target.value)}
-                    />
-                  </Field>
-                ) : (
-                  <>
-                    <Field
-                      label={
-                        l.assetId
-                          ? 'File sudah diunggah · pilih untuk mengganti'
-                          : 'Unggah file materi'
-                      }
-                    >
-                      <input
-                        type="file"
-                        disabled={uploading !== null}
-                        accept={
-                          l.type === 'video'
-                            ? '.mp4,.webm'
-                            : l.type === 'pdf'
-                              ? '.pdf'
-                              : '.png,.jpg,.jpeg,.webp'
-                        }
-                        onChange={(e) => upload(i, e.target.files[0])}
-                      />
-                    </Field>
-                    {l.assetId && (
-                      <a
-                        className="text-link"
-                        href={'/api/files/' + l.assetId}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <CheckCircle2 size={15} />
-                        {l.fileName || 'Lihat file tersimpan'}{' '}
-                        <ArrowUpRight size={14} />
-                      </a>
-                    )}
-                    {uploading === i && (
-                      <p className="muted">Mengunggah file…</p>
-                    )}
-                    {l.type === 'video' && (
-                      <div className="form-grid">
-                        <Field
-                          label="URL video HTTPS (alternatif unggahan)"
-                          hint="Gunakan tautan langsung MP4/WebM, bukan halaman YouTube."
-                        >
-                          <input
-                            type="url"
-                            value={l.url || ''}
-                            disabled={!!l.assetId}
-                            onChange={(e) =>
-                              updateLesson(i, 'url', e.target.value)
-                            }
-                          />
-                        </Field>
-                        <Field label="Durasi video (detik)">
-                          <input
-                            type="number"
-                            min={1}
-                            value={l.durationSeconds || ''}
-                            onChange={(e) =>
-                              updateLesson(
-                                i,
-                                'durationSeconds',
-                                Number(e.target.value),
-                              )
-                            }
-                          />
-                        </Field>
-                      </div>
-                    )}
-                  </>
-                )}
+                <LessonFields
+                  lesson={l}
+                  uploading={uploading !== null}
+                  uploadActive={uploading === i}
+                  onUpload={(file) => upload(i, file)}
+                  onChange={(patch) =>
+                    setForm((f) => ({
+                      ...f,
+                      lessons: f.lessons.map((item, j) =>
+                        j === i ? { ...item, ...patch } : item,
+                      ),
+                    }))
+                  }
+                />
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -3433,179 +3222,16 @@ function CourseEditor({ course, departments, onClose, onSave }) {
         )}
         {tab === 'Kuis' && (
           <>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={!!form.quiz}
-                onChange={(e) =>
-                  set(
-                    'quiz',
-                    e.target.checked
-                      ? {
-                          passScore: 80,
-                          maxAttempts: 3,
-                          questions: [
-                            {
-                              id: crypto.randomUUID(),
-                              text: '',
-                              options: ['', ''],
-                              answer: 0,
-                            },
-                          ],
-                        }
-                      : null,
-                  )
-                }
-              />{' '}
-              Tambahkan evaluasi akhir kelas
-            </label>
-            {form.quiz ? (
-              <>
-                <div className="form-grid">
-                  <Field label="Nilai minimum kelulusan">
-                    <input
-                      type="number"
-                      min={1}
-                      max={100}
-                      value={form.quiz.passScore}
-                      onChange={(e) =>
-                        updateQuiz('passScore', Number(e.target.value))
-                      }
-                    />
-                  </Field>
-                  <Field label="Batas percobaan">
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={form.quiz.maxAttempts}
-                      onChange={(e) =>
-                        updateQuiz('maxAttempts', Number(e.target.value))
-                      }
-                    />
-                  </Field>
-                </div>
-                {form.quiz.questions.map((q, i) => (
-                  <div className="lesson-editor" key={q.id}>
-                    <div className="lesson-editor-heading">
-                      <strong>Pertanyaan {i + 1}</strong>
-                      <button
-                        type="button"
-                        className="icon-button"
-                        aria-label="Hapus pertanyaan"
-                        onClick={() =>
-                          updateQuiz(
-                            'questions',
-                            form.quiz.questions.filter((_, j) => j !== i),
-                          )
-                        }
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                    <Field label="Pertanyaan">
-                      <textarea
-                        rows={2}
-                        value={q.text}
-                        onChange={(e) =>
-                          updateQuestion(i, 'text', e.target.value)
-                        }
-                      />
-                    </Field>
-                    <span className="field-inline-label">
-                      Pilihan jawaban · tandai jawaban yang benar
-                    </span>
-                    {q.options.map((o, j) => (
-                      <div className="option-editor" key={j}>
-                        <input
-                          type="radio"
-                          aria-label={'Kunci jawaban ' + (j + 1)}
-                          checked={q.answer === j}
-                          onChange={() => updateQuestion(i, 'answer', j)}
-                        />
-                        <input
-                          aria-label={'Pilihan jawaban ' + (j + 1)}
-                          value={o}
-                          onChange={(e) =>
-                            updateQuestion(
-                              i,
-                              'options',
-                              q.options.map((x, k) =>
-                                k === j ? e.target.value : x,
-                              ),
-                            )
-                          }
-                        />
-                        {q.options.length > 2 && (
-                          <button
-                            type="button"
-                            className="icon-button"
-                            aria-label="Hapus pilihan"
-                            onClick={() => {
-                              const opts = q.options.filter((_, k) => k !== j);
-                              updateQuiz(
-                                'questions',
-                                form.quiz.questions.map((x, k) =>
-                                  k === i
-                                    ? {
-                                        ...x,
-                                        options: opts,
-                                        answer:
-                                          q.answer === j
-                                            ? 0
-                                            : q.answer > j
-                                              ? q.answer - 1
-                                              : q.answer,
-                                      }
-                                    : x,
-                                ),
-                              );
-                            }}
-                          >
-                            <X size={15} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {q.options.length < 6 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        icon={Plus}
-                        onClick={() =>
-                          updateQuestion(i, 'options', [...q.options, ''])
-                        }
-                      >
-                        Tambah pilihan
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  icon={Plus}
-                  onClick={() =>
-                    updateQuiz('questions', [
-                      ...form.quiz.questions,
-                      {
-                        id: crypto.randomUUID(),
-                        text: '',
-                        options: ['', ''],
-                        answer: 0,
-                      },
-                    ])
-                  }
-                >
-                  Tambah pertanyaan
-                </Button>
-              </>
-            ) : (
-              <Empty
-                title="Belajar tanpa evaluasi"
-                text="Aktifkan kuis jika kelas memerlukan penilaian pemahaman."
-              />
-            )}
+            <QuizEditor
+              phase="pre"
+              quiz={form.preQuiz}
+              onChange={(quiz) => set('preQuiz', quiz)}
+            />
+            <QuizEditor
+              phase="post"
+              quiz={form.quiz}
+              onChange={(quiz) => set('quiz', quiz)}
+            />
           </>
         )}
         <ErrorMessage message={error} />

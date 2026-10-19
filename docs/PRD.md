@@ -1,6 +1,6 @@
 # PRD — Polindo Utama e-Learning Center (PULC)
 
-Versi 0.1. Berdasarkan kebutuhan dan PRD yang disepakati pada percakapan proyek. Dokumen ini membedakan kebutuhan produk dari cakupan implementasi awal.
+Versi 0.2. Berdasarkan kebutuhan dan PRD yang disepakati pada percakapan proyek. Dokumen ini membedakan kebutuhan produk dari cakupan implementasi awal.
 
 ## Tujuan
 
@@ -21,7 +21,7 @@ Versi awal mempunyai dua peran teknis: `admin` dan `employee`. Pemisahan Super A
 
 ## Struktur dan contoh program
 
-Program → kelas → materi berurutan dengan label modul/bagian → evaluasi akhir opsional.
+Program → kelas → pre-test opsional → materi berurutan dengan label modul/bagian → post-test opsional.
 
 Program awal: Pengenalan Perusahaan, Safety Conduct, dan Alur Kerja Pabrik. Kelas tambahan mencakup Quality Control, Komunikasi/Kolaborasi, dan Literasi Digital. Semua konten seed adalah demonstrasi; HR/HSE/departemen wajib menyediakan atau meninjau isi resmi.
 
@@ -29,36 +29,36 @@ Penyelesaian kelas keselamatan tidak menggantikan validasi praktik, izin kerja, 
 
 ## Kebutuhan versi awal
 
-| ID      | Kebutuhan                                        | Implementasi                                                            |
-| ------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| AUTH-01 | Akun internal, login, logout, akses sesuai peran | Sesi HttpOnly, kata sandi scrypt, pembatasan percobaan login            |
-| AUTH-02 | Akun baru dan pemulihan melalui admin            | Kata sandi awal wajib diganti; reset oleh admin                         |
-| ADM-01  | Mengelola akun dan departemen                    | CRUD akun tanpa penghapusan riwayat; departemen pada profil akun        |
-| ADM-02  | Impor karyawan                                   | CSV, maksimal 500 baris, pratinjau, validasi, penolakan duplikat atomik |
-| CLS-01  | Membuat dan menyusun kelas                       | Informasi, kategori, durasi, tema sampul, label modul, urutan materi    |
-| CLS-02  | Materi multimedia                                | Teks, gambar, video MP4/WebM, PDF; unggahan privat maksimal 100 MB      |
-| CLS-03  | Publikasi dan revisi                             | Draft, terbit, arsip, duplikasi, pratinjau admin tanpa progres          |
-| CLS-04  | Audiens                                          | Seluruh karyawan atau departemen; penugasan eksplisit memberi akses     |
-| PRG-01  | Program onboarding                               | Program dengan daftar kelas yang dipilih sesuai urutan                  |
-| ASN-01  | Penugasan dan tenggat                            | Per karyawan/departemen; program diturunkan menjadi penugasan kelas     |
-| LRN-01  | Beranda dan katalog                              | Penugasan, lanjut belajar, pencarian, kategori                          |
-| LRN-02  | Progres tersimpan                                | Materi, posisi video, rentang tontonan, kelulusan kelas/program         |
-| LRN-03  | Urutan materi                                    | Penguncian materi berdasarkan penyelesaian materi wajib sebelumnya      |
-| QZ-01   | Kuis                                             | Pilihan ganda, penilaian server, nilai minimum, batas percobaan         |
-| QZ-02   | Kesempatan tambahan                              | Admin menambah satu percobaan dengan alasan dan audit log               |
-| RPT-01  | Pemantauan                                       | Progres, status, tenggat, skor terbaik, percobaan, penyelesaian         |
-| RPT-02  | Ekspor dan audit                                 | CSV laporan, 100 aktivitas terbaru pada API audit                       |
-| UX-01   | Ponsel dan aksesibilitas dasar                   | Responsif, label input, keyboard, fokus modal, dukungan reduced motion  |
-| NOT-01  | Pengingat                                        | Daftar penugasan wajib belum selesai di notifikasi aplikasi             |
+| ID      | Kebutuhan                                        | Implementasi                                                                                                                          |
+| ------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| AUTH-01 | Akun internal, login, logout, akses sesuai peran | Sesi HttpOnly, kata sandi scrypt, pembatasan percobaan login                                                                          |
+| AUTH-02 | Akun baru dan pemulihan melalui admin            | Kata sandi awal wajib diganti; reset oleh admin                                                                                       |
+| ADM-01  | Mengelola akun dan departemen                    | CRUD akun tanpa penghapusan riwayat; departemen pada profil akun                                                                      |
+| ADM-02  | Impor karyawan                                   | CSV, maksimal 500 baris, pratinjau, validasi, penolakan duplikat atomik                                                               |
+| CLS-01  | Membuat dan menyusun kelas                       | Informasi, kategori, durasi, tema sampul, label modul, urutan materi                                                                  |
+| CLS-02  | Materi multimedia                                | Teks, gambar, video upload/YouTube, audio, PDF/Word, Canva; deskripsi multimedia dan unduhan dokumen; unggahan privat maksimal 100 MB |
+| CLS-03  | Publikasi dan revisi                             | Draft, terbit, arsip, duplikasi, pratinjau admin tanpa progres                                                                        |
+| CLS-04  | Audiens                                          | Seluruh karyawan atau departemen; penugasan eksplisit memberi akses                                                                   |
+| PRG-01  | Program onboarding                               | Program dengan daftar kelas yang dipilih sesuai urutan                                                                                |
+| ASN-01  | Penugasan dan tenggat                            | Per karyawan/departemen; program diturunkan menjadi penugasan kelas                                                                   |
+| LRN-01  | Beranda dan katalog                              | Penugasan, lanjut belajar, pencarian, kategori                                                                                        |
+| LRN-02  | Progres tersimpan                                | Materi, posisi video, rentang tontonan, kelulusan kelas/program                                                                       |
+| LRN-03  | Urutan materi                                    | Penguncian materi berdasarkan penyelesaian materi wajib sebelumnya                                                                    |
+| QZ-01   | Kuis                                             | Pre-test diagnostik satu kali; post-test pilihan ganda, penilaian server, nilai minimum, batas percobaan                              |
+| QZ-02   | Kesempatan tambahan                              | Admin menambah satu percobaan dengan alasan dan audit log                                                                             |
+| RPT-01  | Pemantauan                                       | Progres, status, tenggat, skor terbaik, percobaan, penyelesaian                                                                       |
+| RPT-02  | Ekspor dan audit                                 | CSV laporan, 100 aktivitas terbaru pada API audit                                                                                     |
+| UX-01   | Ponsel dan aksesibilitas dasar                   | Responsif, label input, keyboard, fokus modal, dukungan reduced motion                                                                |
+| NOT-01  | Pengingat                                        | Daftar penugasan wajib belum selesai di notifikasi aplikasi                                                                           |
 
 ## Aturan bisnis
 
-1. Progres kelas menghitung materi wajib serta evaluasi bila tersedia.
-2. Materi teks/gambar/PDF diselesaikan melalui pengakuan peserta. Video membutuhkan cakupan 90% rentang unik yang diputar.
+1. Progres kelas menghitung materi wajib, pre-test jika tersedia, serta post-test jika tersedia.
+2. Materi teks/gambar/PDF/Word/Canva diselesaikan melalui pengakuan peserta. Video dan audio membutuhkan cakupan 90% rentang unik yang diputar.
 3. Materi opsional tidak menghalangi kelulusan. Urutan wajib berlaku pada materi di dalam kelas bila diaktifkan.
-4. Kuis terbuka setelah seluruh materi wajib selesai. Nilai minimum dan batas percobaan dapat diatur; usulan awal 80 dan tiga percobaan.
+4. Pre-test opsional dikerjakan sekali sebelum materi untuk mencatat kemampuan awal; nilai rendah tetap membuka pembelajaran. Post-test terbuka setelah seluruh materi wajib selesai. Nilai minimum dan batas percobaan post-test dapat diatur; usulan awal 80 dan tiga percobaan.
 5. Jawaban benar tidak dikirim ke karyawan; server menghitung nilai. Admin melihat kunci pada editor/pratinjau.
-6. Kelas selesai setelah materi wajib selesai dan kuis lulus. Program selesai setelah semua kelasnya selesai.
+6. Kelas selesai setelah pre-test dikumpulkan jika tersedia, materi wajib selesai, dan post-test lulus jika tersedia. Program selesai setelah semua kelasnya selesai.
 7. Status: belum dimulai, sedang dipelajari, selesai. Terlambat berarti belum selesai dan tenggat terlewati berdasarkan tanggal Asia/Jakarta.
 8. Penugasan ulang mempertahankan progres; tenggat terdekat berlaku jika beberapa penugasan bertemu pada kelas yang sama.
 9. Penugasan departemen berlaku untuk anggota aktif saat itu. Karyawan baru perlu penugasan tambahan.
@@ -95,7 +95,7 @@ Laporan dasar tersedia. Agregasi aktivasi, durasi onboarding, dan analitik lanju
 - Alur utama berfungsi pada ponsel tanpa halaman melebar.
 - Unggahan, kegagalan validasi, dan penyimpanan menampilkan pesan yang jelas.
 
-Pengujian otomatis proyek memverifikasi API serta alur browser termasuk media aktual. Uji penerimaan menggunakan materi dan kelompok karyawan sebenarnya tetap diperlukan.
+Pengujian otomatis proyek memverifikasi API, migrasi data lama, pre/post-test, unduhan, serta alur browser termasuk video/audio aktual. Integrasi layanan YouTube/Canva disimulasikan di tes browser agar deterministik; ketersediaan konten eksternal perlu verifikasi dengan izin embed dan jaringan yang sesuai. Uji penerimaan menggunakan materi dan kelompok karyawan sebenarnya tetap diperlukan.
 
 ## Tahapan selanjutnya
 
@@ -106,3 +106,13 @@ Pengujian otomatis proyek memverifikasi API serta alur browser termasuk media ak
 5. Kembangkan peran editor/supervisor, HRIS/SSO, notifikasi email/WhatsApp, jadwal kelas/presensi, sertifikat, pembelajaran ulang berkala, subtitle khusus, offline, dan analitik lanjutan sesuai prioritas.
 
 Pembayaran, marketplace kelas publik, dan penjualan kelas tidak termasuk kebutuhan awal.
+
+## Revisi materi dan evaluasi (v0.2)
+
+- Video menyediakan pilihan unggahan, URL HTTPS langsung, atau link YouTube resmi.
+- Setiap multimedia mempunyai kolom deskripsi/teks arahan yang ditampilkan di bawah materi.
+- PDF dan dokumen Word menyediakan unduhan dengan otorisasi akses kelas.
+- Presentasi Canva memakai URL view/embed resmi, bukan iframe HTML bebas atau link edit.
+- Audio merupakan format materi tersendiri dengan pemutar, resume, dan pencatatan progres.
+- Pre-test dan post-test dapat diaktifkan terpisah. Laporan memisahkan nilai awal, nilai akhir terbaik, dan perubahan nilai.
+- Database lama mempertahankan kuis sebagai post-test dan seluruh hasil/progresnya. Revisi kelas yang telah berpeserta menggunakan duplikasi draft.
